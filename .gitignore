@@ -1,0 +1,26 @@
+# Lokale Python-Umgebung
+venv/
+__pycache__/
+*.pyc
+
+# Lokale Datenbank und Backups - enthalten echte Lagerdaten, gehoeren nie ins Repo
+lager.db
+lager.db-wal
+lager.db-shm
+backups/
+
+# Logs
+*.log
+
+# Geheimnisse (Datenbank-Zugangsdaten etc.) - siehe secrets.toml.example fuer die Vorlage
+.streamlit/secrets.toml
+
+# Geraete-/netzwerkspezifische Verknuepfungen (enthalten lokale IP-Adressen)
+verknuepfungen/
+
+# Einmaliger Bestandsimport (bereits erledigt) - enthaelt echte Lagerdaten,
+# wird fuer den laufenden Betrieb nicht mehr gebraucht
+import/
+
+# macOS
+.DS_Store
