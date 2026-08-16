@@ -131,36 +131,57 @@ def connection():
 
 # --------------------------------------------------------------
 # Postgres faltet unquotierte Bezeichner (Tabellen/Spalten) automatisch auf
-# Kleinschreibung - "LaengeMM" kommt als "laengemm" zurueck. Unser Schema
-# nutzt aber bewusst lesbare GroSs-/Kleinschreibung, und der ganze Code
-# (logic.py, app.py) greift ueber genau diese Namen zu (z.B. row["LaengeMM"]).
-# Diese Liste bildet Kleinschreibung -> Original ab, damit Zeilen/DataFrames
-# in beiden Backends identisch aussehen - betrifft nur das LESEN von
-# Ergebnissen, nicht die Queries selbst (dort ist Postgres beim Abgleich
-# case-insensitiv, das funktioniert bereits ohne Anpassung).
+# Kleinschreibung - "LaengeMM" kommt als "laengemm" zurueck, ein SQL-Alias
+# "AS ergebniswert" ebenso. sqlite3.Row erlaubt dagegen sowohl Zugriff per
+# Position (row[0]) als auch per Name in Original-Gross-/Kleinschreibung.
+# _Zeile bildet dieses Verhalten fuer Postgres nach: Namenszugriff wird
+# case-insensitiv aufgeloest (keine feste Umbenennungs-Tabelle noetig, die
+# bei zufaelligen Namensueberschneidungen falsch raten koennte).
 # --------------------------------------------------------------
 
-_KANONISCHE_SPALTEN = {
-    name.lower(): name
-    for name in [
-        "ID", "LagerID", "TypID", "EinheitID", "OrtRegal", "Bezeichnung", "Symbol",
-        "Schluessel", "Wert", "Profil", "Abkuerzung", "Material", "Gruppe", "Barcode",
-        "Mass", "Barcode2", "LaengeMM", "MaterialGruppe", "Typ", "MengeStueck",
-        "EPreis", "EPreisEinheit", "Datum", "QuellTabelle", "GeloeschtAm",
-    ]
-}
+class _Zeile(dict):
+    def __init__(self, mapping):
+        super().__init__(mapping)
+        self._werte = list(mapping.values())
+        self._klein_zu_original = {k.lower(): k for k in mapping}
+
+    def __getitem__(self, schluessel):
+        if isinstance(schluessel, int):
+            return self._werte[schluessel]
+        if schluessel in self:
+            return super().__getitem__(schluessel)
+        original = self._klein_zu_original.get(schluessel.lower())
+        if original is not None:
+            return super().__getitem__(original)
+        raise KeyError(schluessel)
 
 
 def _normalisiere_zeile(row):
     if row is None or not _ist_postgres():
         return row
-    return {_KANONISCHE_SPALTEN.get(k, k): v for k, v in row.items()}
+    return _Zeile(row)
 
 
 def _normalisiere_df(df: pd.DataFrame) -> pd.DataFrame:
+    """DataFrame-Spaltennamen fuer die Anzeige in die im Schema definierte
+    Gross-/Kleinschreibung zurueckbringen (Postgres liefert sie klein)."""
     if _ist_postgres():
-        df = df.rename(columns=_KANONISCHE_SPALTEN)
+        df = df.rename(columns={c: _SCHEMA_SPALTEN.get(c.lower(), c) for c in df.columns})
     return df
+
+
+# Fuer _normalisiere_df: nur echte Schema-Spalten umbenennen (nicht per
+# Alias erzeugte Anzeigespalten wie "Quelle") - aus dem Postgres-Schema
+# extrahiert, damit es garantiert mit den echten Tabellen uebereinstimmt.
+def _lade_schema_spalten() -> dict[str, str]:
+    import re
+
+    text = SCHEMA_PATH_POSTGRES.read_text(encoding="utf-8")
+    namen = re.findall(r"^\s*(\w+)\s+(?:TEXT|REAL|INTEGER|SERIAL)\b", text, re.MULTILINE)
+    return {n.lower(): n for n in namen}
+
+
+_SCHEMA_SPALTEN = _lade_schema_spalten()
 
 
 def _cursor(conn):

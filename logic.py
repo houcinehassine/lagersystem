@@ -351,13 +351,16 @@ def suche(begriff: str, nach: str = "Barcode") -> dict[str, "db.pd.DataFrame"]:
 
 def distinct_werte(spalte: str) -> list[str]:
     """Eindeutige, nicht-leere Werte einer Spalte ueber Artikel_Liste UND Reste - fuer Dropdowns."""
+    # Alias bewusst nicht "wert" genannt - kollidiert sonst mit der echten
+    # Spalte "Wert" aus der Konfiguration-Tabelle (Postgres behandelt beides
+    # gleich, da Bezeichner klein gefaltet werden).
     query = f"""
-        SELECT DISTINCT {spalte} AS wert FROM Artikel_Liste WHERE {spalte} IS NOT NULL AND {spalte} != ''
+        SELECT DISTINCT {spalte} AS ergebniswert FROM Artikel_Liste WHERE {spalte} IS NOT NULL AND {spalte} != ''
         UNION
-        SELECT DISTINCT {spalte} AS wert FROM Reste WHERE {spalte} IS NOT NULL AND {spalte} != ''
-        ORDER BY wert
+        SELECT DISTINCT {spalte} AS ergebniswert FROM Reste WHERE {spalte} IS NOT NULL AND {spalte} != ''
+        ORDER BY ergebniswert
     """
-    return [row["wert"] for row in db.fetch_all(query)]
+    return [row["ergebniswert"] for row in db.fetch_all(query)]
 
 
 def erweiterte_suche(
