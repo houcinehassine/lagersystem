@@ -131,29 +131,25 @@ def connection():
 
 # --------------------------------------------------------------
 # Postgres faltet unquotierte Bezeichner (Tabellen/Spalten) automatisch auf
-# Kleinschreibung - "LaengeMM" kommt als "laengemm" zurueck, ein SQL-Alias
-# "AS ergebniswert" ebenso. sqlite3.Row erlaubt dagegen sowohl Zugriff per
-# Position (row[0]) als auch per Name in Original-Gross-/Kleinschreibung.
-# _Zeile bildet dieses Verhalten fuer Postgres nach: Namenszugriff wird
-# case-insensitiv aufgeloest (keine feste Umbenennungs-Tabelle noetig, die
-# bei zufaelligen Namensueberschneidungen falsch raten koennte).
+# Kleinschreibung - "LaengeMM" kommt als "laengemm" zurueck. sqlite3.Row
+# erlaubt Zugriff per Position (row[0]) UND per Name in der im Schema
+# definierten Gross-/Kleinschreibung. _Zeile bildet das fuer Postgres nach -
+# und zwar, indem die Schluessel schon beim Erstellen umbenannt werden
+# (nicht erst bei row["Spalte"]), damit auch dict(row) (z.B. in
+# logic.hole_daten_ag) die richtige Schreibweise behaelt.
 # --------------------------------------------------------------
 
 class _Zeile(dict):
     def __init__(self, mapping):
-        super().__init__(mapping)
         self._werte = list(mapping.values())
-        self._klein_zu_original = {k.lower(): k for k in mapping}
+        super().__init__(
+            (_SCHEMA_SPALTEN.get(k.lower(), k), v) for k, v in mapping.items()
+        )
 
     def __getitem__(self, schluessel):
         if isinstance(schluessel, int):
             return self._werte[schluessel]
-        if schluessel in self:
-            return super().__getitem__(schluessel)
-        original = self._klein_zu_original.get(schluessel.lower())
-        if original is not None:
-            return super().__getitem__(original)
-        raise KeyError(schluessel)
+        return super().__getitem__(schluessel)
 
 
 def _normalisiere_zeile(row):
