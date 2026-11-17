@@ -333,7 +333,12 @@ def _aehnlichster(name: str, kandidaten) -> str | None:
         return None
     bester, beste_note = None, 0.0
     for kandidat in kandidaten:
-        note = SequenceMatcher(None, gesucht, _vergleichsform(kandidat)).ratio()
+        vergleich = _vergleichsform(kandidat)
+        # Namen, die sich nur in den Ziffern unterscheiden ('Regal 1' / 'Regal 2', 'Lager A1' / 'Lager A2'),
+        # sind fast sicher verschiedene Dinge und kein Tippfehler.
+        if gesucht != vergleich and re.sub(r"\d", "", gesucht) == re.sub(r"\d", "", vergleich):
+            continue
+        note = SequenceMatcher(None, gesucht, vergleich).ratio()
         if note >= AEHNLICHKEITS_SCHWELLE and note > beste_note:
             bester, beste_note = kandidat, note
     return bester
