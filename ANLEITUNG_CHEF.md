@@ -51,6 +51,12 @@ Gut zu wissen: Ob ein Stück „Voll" oder „Rest" ist, entscheidet automatisch
 
 Auf dem Dashboard: Barcode scannen oder Bezeichnung eingeben – die Ergebnisse erscheinen direkt darunter. Für genauere Suche (z. B. nach Material oder Länge) den Bereich **„Erweiterte Filter"** benutzen.
 
+## Mehrere Artikel auf einmal löschen
+
+Auf den Seiten **Artikel Liste** und **Reste**: links in der Tabelle Häkchen setzen (das Häkchen in der Kopfzeile wählt alle) und auf **„🗑️ … ausgewählte löschen"** klicken. Nach einer Rückfrage landen die Stücke im **Papierkorb**.
+
+Das funktioniert auch mit dem Filter: erst filtern, dann entweder einzelne Zeilen auswählen oder – bei aktivem Filter – **„Alle … angezeigten löschen"** nehmen. Der Filter bleibt aktiv, bis man auf „Filter zurücksetzen" klickt.
+
 ## Aus Versehen gelöscht?
 
 Kein Problem: Gelöschte Artikel landen zunächst im **Papierkorb** und können dort mit einem Klick auf **„♻️ Wiederherstellen"** zurückgeholt werden. Erst ein zweiter, extra bestätigter Klick auf **„🗑️ Endgültig löschen"** entfernt sie wirklich.

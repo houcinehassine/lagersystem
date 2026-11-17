@@ -182,6 +182,36 @@ def soft_delete_artikel_stueck(table: str, barcode2: str) -> None:
     db.execute(f"DELETE FROM {table} WHERE Barcode2 = ?", (barcode2,))
 
 
+def soft_delete_artikel_stuecke(table: str, barcodes2: list[str]) -> int:
+    """Verschiebt mehrere Stuecke auf einmal in den Papierkorb (alles in EINER Transaktion:
+    ganz oder gar nicht). Stuecke, die inzwischen nicht mehr existieren (z.B. weil jemand anderes
+    sie gerade entfernt hat), werden uebersprungen. Gibt die Anzahl verschobener Stuecke zurueck."""
+    if table not in ("Artikel_Liste", "Reste"):
+        raise LagerFehler(f"Ungueltige Tabelle: {table}")
+
+    geloescht_am = _dt.datetime.now().isoformat(timespec="seconds")
+    verschoben = 0
+    with _SCHREIB_LOCK, db.transaktion() as tx:
+        for barcode2 in dict.fromkeys(barcodes2):  # Duplikate entfernen, Reihenfolge behalten
+            zeile = tx.fetch_one(f"SELECT * FROM {table} WHERE Barcode2 = ?", (barcode2,))
+            if zeile is None:
+                continue
+            tx.execute(
+                """INSERT INTO Papierkorb
+                   (QuellTabelle, GeloeschtAm, Datum, Barcode, Barcode2, Bezeichnung, Profil, Mass, LaengeMM,
+                    MaterialGruppe, Material, OrtRegal, Typ, MengeStueck, EPreis, EPreisEinheit)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    table, geloescht_am, zeile["Datum"], zeile["Barcode"], zeile["Barcode2"], zeile["Bezeichnung"],
+                    zeile["Profil"], zeile["Mass"], zeile["LaengeMM"], zeile["MaterialGruppe"], zeile["Material"],
+                    zeile["OrtRegal"], zeile["Typ"], zeile["MengeStueck"], zeile["EPreis"], zeile["EPreisEinheit"],
+                ),
+            )
+            tx.execute(f"DELETE FROM {table} WHERE Barcode2 = ?", (barcode2,))
+            verschoben += 1
+    return verschoben
+
+
 def papierkorb_wiederherstellen(papierkorb_id: int) -> None:
     """Legt ein Papierkorb-Stueck wieder in seiner urspruenglichen Tabelle an."""
     zeile = db.fetch_one("SELECT * FROM Papierkorb WHERE ID = ?", (papierkorb_id,))

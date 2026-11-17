@@ -370,15 +370,92 @@ def filter_bar(table: str, key_prefix: str) -> pd.DataFrame | None:
         _, col_btn = st.columns([3, 1])
         gefiltert = col_btn.form_submit_button("Filtern", type="primary", use_container_width=True)
 
-    if not gefiltert:
+    # Der Filter wird gemerkt und bei jedem Seitenlauf neu angewendet - sonst waere er beim
+    # naechsten Klick (z.B. Zeilen auswaehlen oder loeschen) wieder weg.
+    aktiv_key = f"{key_prefix}_filter_aktiv"
+    if gefiltert:
+        st.session_state[aktiv_key] = dict(
+            profil=f_profil or "", barcode=f_barcode or "", bezeichnung=f_bezeichnung or "",
+            ort=f_ort or "", material=f_material or "", mass=f_mass or "",
+            laenge_von=f_laenge_von, laenge_bis=f_laenge_bis,
+        )
+
+    kriterien = st.session_state.get(aktiv_key)
+    if kriterien is None:
         return None
 
-    ergebnisse = logic.erweiterte_suche(
-        profil=f_profil or "", barcode=f_barcode or "", bezeichnung=f_bezeichnung or "",
-        ort=f_ort or "", material=f_material or "", mass=f_mass or "",
-        laenge_von=f_laenge_von, laenge_bis=f_laenge_bis,
+    col_info, col_reset = st.columns([4, 1])
+    col_info.caption("Filter aktiv – die Liste unten zeigt nur die gefilterten Zeilen.")
+    if col_reset.button("Filter zuruecksetzen", key=f"{key_prefix}_filter_reset", use_container_width=True):
+        del st.session_state[aktiv_key]
+        st.rerun()
+
+    return logic.erweiterte_suche(**kriterien).get(table, pd.DataFrame())
+
+
+def stuecke_tabelle(df: pd.DataFrame, table: str, titel: str, pdf_titel: str, key: str, gefiltert: bool) -> None:
+    """Liste von Stuecken (Artikel_Liste oder Reste) mit Zeilenauswahl und Sammel-Loeschen.
+
+    Auswaehlen: Haekchen links in der Zeile (Kopfzeile = alle). Geloescht wird - wie beim
+    einzelnen Loeschen - nicht endgueltig, sondern in den Papierkorb. Bei aktivem Filter
+    gibt es zusaetzlich 'alle angezeigten loeschen'."""
+    col_titel, col_pdf = st.columns([5, 1])
+    col_titel.subheader(f"{titel} ({len(df)})")
+    if df.empty:
+        st.info("Keine Treffer fuer diese Filterkombination." if gefiltert else "Noch keine Eintraege vorhanden.")
+        return
+    with col_pdf:
+        st.write("")
+        pdf_download_button(df, pdf_titel, key=f"pdf_{key}", label="📄 PDF")
+
+    # Zaehler + Datenstand im Key: nach einem Loeschen oder bei neuem Filter beginnt die Auswahl
+    # leer - sonst wuerden alte Zeilennummern auf andere Zeilen zeigen.
+    stand = hash(tuple(df["ID"]))
+    zaehler = st.session_state.get(f"{key}_n", 0)
+    ereignis = st.dataframe(
+        df, use_container_width=True, hide_index=True, height=volle_hoehe(df),
+        on_select="rerun", selection_mode="multi-row", key=f"{key}_sel_{zaehler}_{stand}",
     )
-    return ergebnisse.get(table, pd.DataFrame())
+    ausgewaehlt = df.iloc[list(ereignis.selection.rows)]["Barcode2"].tolist()
+
+    # Welche Auswahl ist gerade zum Loeschen vorgemerkt (wartet auf Bestaetigung)?
+    bestaetigung_key = f"{key}_bestaetigung"
+    vorgemerkt: list[str] | None = st.session_state.get(bestaetigung_key)
+    if vorgemerkt is not None and set(vorgemerkt) - set(df["Barcode2"]):
+        vorgemerkt = None  # Liste hat sich inzwischen geaendert
+        st.session_state.pop(bestaetigung_key, None)
+
+    col_sel, col_alle, _ = st.columns([2, 2, 3])
+    if col_sel.button(
+        f"🗑️ {len(ausgewaehlt)} ausgewaehlte loeschen", key=f"{key}_btn_sel",
+        disabled=not ausgewaehlt, use_container_width=True,
+    ):
+        st.session_state[bestaetigung_key] = ausgewaehlt
+        st.rerun()
+    if gefiltert and col_alle.button(
+        f"🗑️ Alle {len(df)} angezeigten loeschen", key=f"{key}_btn_alle", use_container_width=True,
+    ):
+        st.session_state[bestaetigung_key] = df["Barcode2"].tolist()
+        st.rerun()
+    if not ausgewaehlt and vorgemerkt is None:
+        st.caption("Zum Loeschen links Haekchen setzen (Haekchen in der Kopfzeile waehlt alle).")
+
+    if vorgemerkt:
+        vorschau = ", ".join(vorgemerkt[:8]) + (f" … und {len(vorgemerkt) - 8} weitere" if len(vorgemerkt) > 8 else "")
+        st.warning(
+            f"**{len(vorgemerkt)} Stueck** wirklich in den Papierkorb verschieben?  \n{vorschau}  \n"
+            "Sie koennen dort wiederhergestellt oder endgueltig geloescht werden."
+        )
+        col_ja, col_nein, _ = st.columns([2, 2, 3])
+        if col_ja.button("Ja, in den Papierkorb", type="primary", key=f"{key}_ja", use_container_width=True):
+            anzahl = logic.soft_delete_artikel_stuecke(table, vorgemerkt)
+            st.session_state.pop(bestaetigung_key, None)
+            st.session_state[f"{key}_n"] = zaehler + 1
+            st.session_state["loesch_meldung"] = f"{anzahl} Stueck in den Papierkorb verschoben."
+            st.rerun()
+        if col_nein.button("Abbrechen", key=f"{key}_nein", use_container_width=True):
+            st.session_state.pop(bestaetigung_key, None)
+            st.rerun()
 
 
 # --------------------------------------------------------------
@@ -516,46 +593,34 @@ def page_dashboard() -> None:
             st.link_button("E-Mail-Entwurf oeffnen", mailto_link)
 
 
-def page_artikel_liste() -> None:
-    st.title("Artikel Liste")
-
+def seite_stuecke(table: str, key_prefix: str, titel_voll: str) -> None:
+    """Gemeinsamer Aufbau von 'Artikel Liste' und 'Reste': Filterleiste + Tabelle mit Auswahl/Loeschen."""
     st.subheader("Filter")
-    gefiltert = filter_bar("Artikel_Liste", "al")
+    gefiltert = filter_bar(table, key_prefix)
 
     st.divider()
+    meldung = st.session_state.pop("loesch_meldung", None)
+    if meldung:
+        st.success(meldung)
+
     if gefiltert is None:
-        zeige_tabelle("Artikel_Liste", "Volle Artikel", order_by="ID DESC")
-    elif gefiltert.empty:
-        st.subheader("Gefiltertes Ergebnis (0)")
-        st.info("Keine Treffer fuer diese Filterkombination.")
+        df = db.fetch_df(f"SELECT * FROM {table} ORDER BY ID DESC")
+        stuecke_tabelle(df, table, titel_voll, titel_voll, key=f"{key_prefix}_voll", gefiltert=False)
     else:
-        col_titel, col_pdf = st.columns([5, 1])
-        col_titel.subheader(f"Gefiltertes Ergebnis ({len(gefiltert)})")
-        with col_pdf:
-            st.write("")
-            pdf_download_button(gefiltert, "Artikel_Liste_gefiltert", key="pdf_al_gefiltert", label="📄 PDF")
-        st.dataframe(gefiltert, use_container_width=True, hide_index=True, height=volle_hoehe(gefiltert))
+        stuecke_tabelle(
+            gefiltert, table, "Gefiltertes Ergebnis", f"{table}_gefiltert", key=f"{key_prefix}_gefiltert",
+            gefiltert=True,
+        )
+
+
+def page_artikel_liste() -> None:
+    st.title("Artikel Liste")
+    seite_stuecke("Artikel_Liste", "al", "Volle Artikel")
 
 
 def page_reste() -> None:
     st.title("Reste")
-
-    st.subheader("Filter")
-    gefiltert = filter_bar("Reste", "re")
-
-    st.divider()
-    if gefiltert is None:
-        zeige_tabelle("Reste", "Reststuecke", order_by="ID DESC")
-    elif gefiltert.empty:
-        st.subheader("Gefiltertes Ergebnis (0)")
-        st.info("Keine Treffer fuer diese Filterkombination.")
-    else:
-        col_titel, col_pdf = st.columns([5, 1])
-        col_titel.subheader(f"Gefiltertes Ergebnis ({len(gefiltert)})")
-        with col_pdf:
-            st.write("")
-            pdf_download_button(gefiltert, "Reste_gefiltert", key="pdf_re_gefiltert", label="📄 PDF")
-        st.dataframe(gefiltert, use_container_width=True, hide_index=True, height=volle_hoehe(gefiltert))
+    seite_stuecke("Reste", "re", "Reststuecke")
 
 
 def page_verlauf() -> None:
