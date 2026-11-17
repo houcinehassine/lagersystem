@@ -222,6 +222,35 @@ def execute(query: str, params: tuple = ()) -> int:
         return cur.rowcount
 
 
+class _Transaktion:
+    """Schmale Huelle um EINE Verbindung, damit mehrere Schritte atomar laufen
+    (siehe transaktion()). Bietet dieselben Methoden wie die Modulfunktionen
+    fetch_all/fetch_one/execute, aber alles auf derselben Verbindung."""
+
+    def __init__(self, conn) -> None:
+        self._cur = _cursor(conn)
+
+    def execute(self, query: str, params: tuple = ()) -> None:
+        self._cur.execute(_uebersetze(query), params)
+
+    def fetch_all(self, query: str, params: tuple = ()) -> list:
+        self._cur.execute(_uebersetze(query), params)
+        return [_normalisiere_zeile(r) for r in self._cur.fetchall()]
+
+    def fetch_one(self, query: str, params: tuple = ()):
+        self._cur.execute(_uebersetze(query), params)
+        return _normalisiere_zeile(self._cur.fetchone())
+
+
+@contextmanager
+def transaktion():
+    """Alles im with-Block laeuft in EINER Transaktion: am Ende wird committet, bei einer
+    Exception passiert gar nichts (Rollback). Fuer Vorgaenge mit vielen Schreibschritten,
+    die nicht halb ausgefuehrt liegen bleiben duerfen (z.B. Excel-Import)."""
+    with connection() as conn:
+        yield _Transaktion(conn)
+
+
 def value_exists(table: str, column: str, value: str) -> bool:
     """Entspricht der alten VBA-Funktion WertExistiertInTabelle."""
     row = fetch_one(f"SELECT 1 FROM {table} WHERE {column} = ? LIMIT 1", (value,))

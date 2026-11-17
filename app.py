@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 
 import db
+import excel_import
 import logic
 
 st.set_page_config(page_title="Lager System", layout="wide")
@@ -614,6 +615,157 @@ def page_artikel_gruppe() -> None:
     zeige_tabelle("Artikel_Gruppe", "Bestehende Artikelgruppen")
 
 
+def page_import() -> None:
+    st.title("Excel-Import")
+    st.caption(
+        "Eine vorbereitete Artikelliste aus Excel auf einmal einbuchen. Das System erkennt die Spalten "
+        "selbst, legt fehlende Artikelgruppen, Profile, Materialien und Lagerorte automatisch an und "
+        "entscheidet anhand der Laenge zwischen vollem Artikel und Rest. Vor dem Einbuchen gibt es eine Vorschau."
+    )
+
+    ergebnis = st.session_state.pop("imp_ergebnis", None)
+    if ergebnis:
+        st.success(ergebnis)
+
+    st.download_button(
+        "📄 Leere Excel-Vorlage herunterladen",
+        data=excel_import.vorlage_bytes(),
+        file_name="Lager_Import_Vorlage.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    # Der Zaehler im Key setzt den Datei-Auswahlknopf nach einem erfolgreichen Import zurueck
+    datei = st.file_uploader(
+        "Excel-Datei (.xlsx) auswaehlen", type=["xlsx"], key=f"imp_datei_{st.session_state.get('imp_n', 0)}"
+    )
+    if datei is None:
+        return
+
+    ueberspringen = st.checkbox(
+        "Stuecke ueberspringen, die schon im Lager sind (gleiche Artikelgruppe, Laenge und Lagerort)",
+        value=True, key="imp_ueberspringen",
+        help="Schuetzt davor, dieselbe Liste versehentlich zweimal einzubuchen.",
+    )
+
+    # Antworten auf Aehnlichkeits-Rueckfragen aus frueheren Laeufen dieser Seite einsammeln
+    # (die Auswahlfelder weiter unten legen sie unter Keys 'imp_ae_<n>|<feld>|<name>' ab).
+    praefix = f"imp_ae_{st.session_state.get('imp_n', 0)}|"
+    entscheidungen = {
+        tuple(key[len(praefix):].split("|", 1)): wert
+        for key, wert in st.session_state.items()
+        if isinstance(key, str) and key.startswith(praefix) and wert in ("korrigieren", "neu")
+    }
+
+    daten = datei.getvalue()
+    try:
+        analyse = excel_import.analysiere(daten, ueberspringen, entscheidungen)
+    except excel_import.ImportFehler as e:
+        st.error(str(e))
+        return
+
+    # --- Rueckfragen: unbekannte Namen, die bekannten sehr aehnlich sehen (Tippfehler?) ---
+    feld_titel = {"profil": "Profil", "material": "Material", "ort": "Lagerort"}
+    if analyse.aehnliche:
+        st.warning(
+            "**Bitte pruefen:** Diese Namen sind neu, sehen aber bestehenden sehr aehnlich - "
+            "vielleicht ein Tippfehler? Bitte jeweils entscheiden."
+        )
+        for a in analyse.aehnliche:
+            st.radio(
+                f"{feld_titel[a.feld]} **'{a.name}'** steht in {a.zeilen} Zeile(n) - meinst du "
+                f"**'{a.vorschlag}'**?",
+                ["korrigieren", "neu"], index=None, horizontal=True,
+                format_func={
+                    "korrigieren": f"Tippfehler – '{a.vorschlag}' verwenden",
+                    "neu": f"Nein, '{a.name}' ist wirklich neu",
+                }.get,
+                key=f"{praefix}{a.feld}|{a.name.casefold()}",
+            )
+    offene_fragen = excel_import.offene_rueckfragen(analyse)
+
+    # --- Zusammenfassung ---
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Zeilen gelesen", analyse.gelesen)
+    c2.metric("Werden eingebucht", len(analyse.positionen))
+    c3.metric("Schon im Lager", len(analyse.vorhandene))
+    c4.metric("Fehlerhaft", len(analyse.fehler))
+
+    if analyse.fehler:
+        st.error(
+            f"{len(analyse.fehler)} Zeile(n) enthalten Fehler und werden NICHT eingebucht. "
+            "Am besten die Excel-Datei korrigieren und neu hochladen."
+        )
+        st.dataframe(
+            pd.DataFrame(analyse.fehler, columns=["Excel-Zeile", "Problem"]),
+            use_container_width=True, hide_index=True,
+        )
+
+    neu = {
+        "Neue Artikelgruppen": analyse.neue_gruppen, "Neue Profile": analyse.neue_profile,
+        "Neue Materialien": analyse.neue_materialien, "Neue Lagerorte": analyse.neue_orte,
+        "Neue Einheiten": analyse.neue_einheiten,
+    }
+    if any(neu.values()):
+        st.warning(
+            "Folgendes ist **neu** und wird automatisch angelegt - bitte pruefen, ob dabei kein "
+            "Tippfehler dabei ist (z.B. 'Flacheisn' statt 'Flacheisen'):"
+        )
+        for titel, eintraege in neu.items():
+            if eintraege:
+                with st.expander(f"{titel} ({len(eintraege)})", expanded=titel != "Neue Artikelgruppen"):
+                    st.write("\n".join(f"- {e}" for e in eintraege))
+
+    if analyse.vorhandene:
+        with st.expander(f"Uebersprungen - schon im Lager ({len(analyse.vorhandene)})"):
+            st.dataframe(
+                pd.DataFrame(
+                    [(p.nr, p.bezeichnung, p.ort, p.laenge, p.menge) for p in analyse.vorhandene],
+                    columns=["Excel-Zeile", "Artikel", "Lagerort", "Laenge (mm)", "Menge"],
+                ),
+                use_container_width=True, hide_index=True,
+            )
+
+    if analyse.positionen:
+        st.subheader(f"Vorschau: {len(analyse.positionen)} Stueck werden eingebucht")
+        vorschau = pd.DataFrame(
+            [
+                (p.nr, p.barcode2, p.bezeichnung, p.ort, p.laenge, p.menge,
+                 "Reste" if p.ziel == "Reste" else "Artikel Liste", "neu" if p.neue_gruppe else "")
+                for p in analyse.positionen
+            ],
+            columns=["Excel-Zeile", "Stueck-Barcode", "Artikel", "Lagerort", "Laenge (mm)", "Menge",
+                     "Landet in", "Artikelgruppe"],
+        )
+        st.dataframe(vorschau, use_container_width=True, hide_index=True, height=min(volle_hoehe(vorschau), 500))
+    else:
+        st.info("Es gibt nichts einzubuchen.")
+
+    # --- Einbuchen ---
+    if offene_fragen:
+        st.info(f"Einbuchen ist erst moeglich, wenn alle {len(offene_fragen)} Rueckfrage(n) oben beantwortet sind.")
+    fehler_ok = True
+    if analyse.fehler:
+        fehler_ok = st.checkbox(
+            "Fehlerhafte Zeilen auslassen und nur die fehlerfreien einbuchen", key="imp_fehler_ok"
+        )
+
+    if st.button(
+        f"✅ {len(analyse.positionen)} Stueck jetzt einbuchen", type="primary",
+        disabled=not analyse.positionen or not fehler_ok or bool(offene_fragen), key="imp_start",
+    ):
+        try:
+            erg = excel_import.importiere(daten, ueberspringen, entscheidungen)
+        except Exception as e:
+            st.error(f"Import abgebrochen - es wurde nichts eingebucht. Grund: {e}")
+            return
+        st.session_state["imp_ergebnis"] = (
+            f"{len(erg.positionen)} Stueck eingebucht ({len(erg.neue_gruppen)} neue Artikelgruppen). "
+            f"{len(erg.vorhandene)} schon vorhanden (uebersprungen), {len(erg.fehler)} fehlerhaft (ausgelassen)."
+        )
+        st.session_state["imp_n"] = st.session_state.get("imp_n", 0) + 1
+        st.rerun()
+
+
 def page_einstellungen() -> None:
     st.title("Einstellungen")
     st.caption("Stammdaten fuer Dropdowns in den anderen Seiten - entspricht dem alten Blatt 'Einstellung'.")
@@ -708,6 +860,7 @@ SEITEN = {
     "Verlauf": page_verlauf,
     "Papierkorb": page_papierkorb,
     "Artikel Gruppe": page_artikel_gruppe,
+    "Excel-Import": page_import,
     "Einstellungen": page_einstellungen,
 }
 
@@ -725,6 +878,10 @@ if st.sidebar.button("✂️ Material entnehmen", use_container_width=True, key=
     dialog_entnahme()
 if st.sidebar.button("✏️ Bearbeiten / Loeschen", use_container_width=True, key="sb_be"):
     dialog_bearbeiten()
+st.sidebar.button(
+    "📥 Excel-Import", use_container_width=True, key="sb_imp",
+    on_click=lambda: st.session_state.update(nav_seite="Excel-Import"),
+)
 if st.sidebar.button("🏷️ Artikel Gruppe", use_container_width=True, key="sb_ag"):
     dialog_artikel_gruppe()
 if st.sidebar.button("🧱 Material Gruppe", use_container_width=True, key="sb_mg"):

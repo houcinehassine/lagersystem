@@ -71,7 +71,8 @@ Getestet mit 100 gleichzeitigen Schreibzugriffen (5 parallele "Nutzer") ohne Kon
 |---|---|
 | `app.py` | Streamlit-Oberfläche (alle Seiten) |
 | `logic.py` | Geschäftslogik (Barcode-Generierung, Entnahme-Logik, Export) |
-| `db.py` | SQLite-Datenzugriffsschicht |
+| `excel_import.py` | Excel-Import: liest eine Artikelliste (.xlsx), erkennt Spalten selbst, legt Fehlendes an, bucht alles in einer Transaktion ein |
+| `db.py` | Datenzugriffsschicht (SQLite lokal / Postgres in der Cloud) |
 | `schema.sql` | Datenbankschema |
 | `lager.db` | Die eigentliche Datenbank |
 | `backup.sh` | Taegliches Backup-Script (wird bei jedem Start automatisch ausgefuehrt) |
