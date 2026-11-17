@@ -125,6 +125,25 @@ GitHub-Cloud-Variante ohne Neon, wo alles bei jedem Neustart verloren ginge).
   Öffnen automatisch wieder auf).
 - **GitHub**: privates Repository kostenlos.
 
+## Neue Programmversion einspielen
+
+Änderungen am Code kommen per `git push` auf den Branch `main`. Die Streamlit
+Community Cloud übernimmt neue Commits von `main` normalerweise automatisch
+und startet die App neu (kann ein paar Minuten dauern; im Streamlit-Menü der
+App lässt sich bei Bedarf manuell "Reboot app" auslösen). Die Daten in Neon
+bleiben dabei unberührt - es ändert sich nur der Programmcode.
+
+Die lokale Mac-Version wird separat aktualisiert (`git pull` + Dienst-Neustart,
+siehe README).
+
+## Testdaten wieder entfernen
+
+Nach einem Probe-Import lassen sich die Stücke in der App über die
+Mehrfachauswahl löschen (Artikel Liste / Reste → Papierkorb → endgültig).
+Artikelgruppen, Profile, Materialien, Lagerorte und Verlauf lassen sich in
+der App nicht löschen; dafür kann ein SQL-Skript im **SQL Editor** von Neon
+ausgeführt werden (zuvor ein Backup/Branch in Neon anlegen).
+
 ## Automatische Backups
 
 Anders als bei der lokalen SQLite-Lösung übernimmt **Neon automatisch**

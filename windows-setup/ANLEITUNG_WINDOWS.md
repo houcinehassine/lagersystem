@@ -23,7 +23,7 @@ Rechne für die komplette Einrichtung mit ca. 30-45 Minuten.
 1. Auf dem Windows-PC einen Ordner anlegen, z. B. `C:\Lagersystem`.
 2. Vom Mac folgende Dateien/Ordner dort hineinkopieren (per USB-Stick, E-Mail an
    dich selbst, gemeinsames Netzlaufwerk o. ä. - **nicht** per iCloud/Cloud-Ordner):
-   - `app.py`, `logic.py`, `db.py`, `schema.sql`, `requirements.txt`
+   - `app.py`, `logic.py`, `excel_import.py`, `db.py`, `schema.sql`, `schema_postgres.sql`, `requirements.txt`
    - Der komplette Ordner `windows-setup` (die Dateien darin auf die oberste Ebene
      von `C:\Lagersystem` legen, siehe Schritt 3)
    - **`lager.db`** (die aktuelle Datenbank) - das erst **ganz am Schluss**, direkt
@@ -33,7 +33,7 @@ Rechne für die komplette Einrichtung mit ca. 30-45 Minuten.
    lassen).
 
 Am Ende sollte `C:\Lagersystem` u. a. enthalten:
-`app.py`, `logic.py`, `db.py`, `schema.sql`, `requirements.txt`, `backup.py`,
+`app.py`, `logic.py`, `excel_import.py`, `db.py`, `schema.sql`, `schema_postgres.sql`, `requirements.txt`, `backup.py`,
 `start_server.bat`, `start.bat`, `start_hidden.vbs`, `lager.db`.
 
 ## 3. Virtuelle Umgebung einrichten
