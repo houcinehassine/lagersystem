@@ -59,7 +59,9 @@ Das funktioniert auch mit dem Filter: erst filtern, dann entweder einzelne Zeile
 
 ## Aus Versehen gelöscht?
 
-Kein Problem: Gelöschte Artikel landen zunächst im **Papierkorb** und können dort mit einem Klick auf **„♻️ Wiederherstellen"** zurückgeholt werden. Erst ein zweiter, extra bestätigter Klick auf **„🗑️ Endgültig löschen"** entfernt sie wirklich.
+Kein Problem: Gelöschte Artikel landen zunächst im **Papierkorb**. Dort links Häkchen setzen (Kopfzeile = alle) und auf **„♻️ … wiederherstellen"** klicken, um sie zurückzuholen. Erst **„🗑️ … endgültig löschen"** mit extra Rückfrage entfernt sie wirklich. Beides geht für mehrere Artikel gleichzeitig.
+
+Wiederherstellen klappt nur, wenn der Stück-Barcode nicht inzwischen neu vergeben wurde. Solche Stücke bleiben im Papierkorb, und die App nennt sie in der Meldung.
 
 ## Bei Problemen
 

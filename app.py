@@ -631,45 +631,75 @@ def page_verlauf() -> None:
 
 def page_papierkorb() -> None:
     st.title("Papierkorb")
-    st.caption("Geloeschte Artikel/Reste - koennen wiederhergestellt oder endgueltig entfernt werden.")
+    st.caption(
+        "Geloeschte Artikel/Reste - koennen wiederhergestellt oder endgueltig entfernt werden. "
+        "Links Haekchen setzen (Kopfzeile = alle), dann unten die Aktion waehlen."
+    )
+
+    meldung = st.session_state.pop("pk_meldung", None)
+    if meldung:
+        st.success(meldung)
 
     df = db.fetch_df("SELECT * FROM Papierkorb ORDER BY ID DESC")
     if df.empty:
         st.info("Papierkorb ist leer.")
         return
 
-    for _, zeile in df.iterrows():
-        eintrag_id = int(zeile["ID"])
-        with st.container(border=True):
-            col_info, col_wieder, col_loeschen = st.columns([4, 1, 1])
-            col_info.write(
-                f"**{zeile['Barcode2']}** – {zeile['Bezeichnung'] or ''} "
-                f"({zeile['LaengeMM'] or 0:.0f} mm, {str(zeile['QuellTabelle']).replace('_', ' ')})  \n"
-                f"Geloescht am {zeile['GeloeschtAm']}"
+    # Zaehler + Datenstand im Key: nach jeder Aktion beginnt die Auswahl leer - sonst wuerden
+    # alte Zeilennummern auf andere Zeilen zeigen.
+    zaehler = st.session_state.get("pk_n", 0)
+    ereignis = st.dataframe(
+        df, use_container_width=True, hide_index=True, height=min(volle_hoehe(df), 600),
+        on_select="rerun", selection_mode="multi-row", key=f"pk_sel_{zaehler}_{hash(tuple(df['ID']))}",
+    )
+    auswahl = df.iloc[list(ereignis.selection.rows)]
+    ids = [int(i) for i in auswahl["ID"]]
+
+    bestaetigung_key = "pk_bestaetigung"
+    vorgemerkt: list[int] | None = st.session_state.get(bestaetigung_key)
+    if vorgemerkt is not None and set(vorgemerkt) - set(df["ID"]):
+        vorgemerkt = None  # Papierkorb hat sich inzwischen geaendert
+        st.session_state.pop(bestaetigung_key, None)
+
+    col_wieder, col_loeschen, _ = st.columns([2, 2, 3])
+    if col_wieder.button(
+        f"♻️ {len(ids)} wiederherstellen", key="pk_btn_wieder", disabled=not ids, use_container_width=True,
+    ):
+        anzahl, konflikte = logic.papierkorb_wiederherstellen_mehrere(ids)
+        text = f"{anzahl} Stueck wiederhergestellt."
+        if konflikte:
+            text += (
+                f" {len(konflikte)} blieben im Papierkorb, weil der Barcode inzwischen wieder vergeben ist: "
+                + ", ".join(konflikte)
             )
-            if col_wieder.button("♻️ Wiederherstellen", key=f"pk_wieder_{eintrag_id}", use_container_width=True):
-                try:
-                    logic.papierkorb_wiederherstellen(eintrag_id)
-                    st.success(f"'{zeile['Barcode2']}' wiederhergestellt.")
-                    st.rerun()
-                except logic.LagerFehler as e:
-                    st.error(str(e))
+        st.session_state["pk_meldung"] = text
+        st.session_state["pk_n"] = zaehler + 1
+        st.rerun()
+    if col_loeschen.button(
+        f"🗑️ {len(ids)} endgueltig loeschen", key="pk_btn_loeschen", disabled=not ids, use_container_width=True,
+    ):
+        st.session_state[bestaetigung_key] = ids
+        st.rerun()
+    if not ids and vorgemerkt is None:
+        st.caption("Noch nichts ausgewaehlt.")
 
-            confirm_key = f"pk_confirm_del_{eintrag_id}"
-            if col_loeschen.button("🗑️ Endgueltig loeschen", key=f"pk_del_{eintrag_id}", use_container_width=True):
-                st.session_state[confirm_key] = True
-
-            if st.session_state.get(confirm_key):
-                st.error(f"'{zeile['Barcode2']}' wirklich UNWIDERRUFLICH loeschen? Das kann nicht rueckgaengig gemacht werden.")
-                col_ja, col_abbrechen = st.columns(2)
-                if col_ja.button("Ja, endgueltig loeschen", type="primary", key=f"pk_ja_{eintrag_id}", use_container_width=True):
-                    logic.papierkorb_endgueltig_loeschen(eintrag_id)
-                    st.session_state.pop(confirm_key, None)
-                    st.warning(f"'{zeile['Barcode2']}' endgueltig geloescht.")
-                    st.rerun()
-                if col_abbrechen.button("Abbrechen", key=f"pk_abbrechen_{eintrag_id}", use_container_width=True):
-                    st.session_state.pop(confirm_key, None)
-                    st.rerun()
+    if vorgemerkt:
+        barcodes = df[df["ID"].isin(vorgemerkt)]["Barcode2"].tolist()
+        vorschau = ", ".join(barcodes[:8]) + (f" … und {len(barcodes) - 8} weitere" if len(barcodes) > 8 else "")
+        st.error(
+            f"**{len(vorgemerkt)} Stueck** wirklich UNWIDERRUFLICH loeschen? "
+            f"Das kann nicht rueckgaengig gemacht werden.  \n{vorschau}"
+        )
+        col_ja, col_nein, _ = st.columns([2, 2, 3])
+        if col_ja.button("Ja, endgueltig loeschen", type="primary", key="pk_ja", use_container_width=True):
+            anzahl = logic.papierkorb_endgueltig_loeschen_mehrere(vorgemerkt)
+            st.session_state.pop(bestaetigung_key, None)
+            st.session_state["pk_meldung"] = f"{anzahl} Stueck endgueltig geloescht."
+            st.session_state["pk_n"] = zaehler + 1
+            st.rerun()
+        if col_nein.button("Abbrechen", key="pk_nein", use_container_width=True):
+            st.session_state.pop(bestaetigung_key, None)
+            st.rerun()
 
 
 def page_artikel_gruppe() -> None:

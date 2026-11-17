@@ -243,6 +243,51 @@ def papierkorb_endgueltig_loeschen(papierkorb_id: int) -> None:
     db.execute("DELETE FROM Papierkorb WHERE ID = ?", (papierkorb_id,))
 
 
+def papierkorb_wiederherstellen_mehrere(papierkorb_ids: list[int]) -> tuple[int, list[str]]:
+    """Stellt mehrere Papierkorb-Eintraege auf einmal wieder her (eine Transaktion).
+    Eintraege, deren Stueck-Barcode in der Zieltabelle schon wieder vergeben ist, bleiben im Papierkorb.
+    Gibt (Anzahl wiederhergestellt, Barcodes der nicht wiederhergestellten) zurueck."""
+    wiederhergestellt = 0
+    konflikte: list[str] = []
+    with _SCHREIB_LOCK, db.transaktion() as tx:
+        for papierkorb_id in dict.fromkeys(papierkorb_ids):
+            zeile = tx.fetch_one("SELECT * FROM Papierkorb WHERE ID = ?", (papierkorb_id,))
+            if zeile is None:
+                continue
+            ziel_table = zeile["QuellTabelle"]
+            if ziel_table not in ("Artikel_Liste", "Reste"):
+                raise LagerFehler(f"Unbekannte Herkunftstabelle im Papierkorb: {ziel_table}")
+            if tx.fetch_one(f"SELECT 1 AS vorhanden FROM {ziel_table} WHERE Barcode2 = ? LIMIT 1", (zeile["Barcode2"],)):
+                konflikte.append(zeile["Barcode2"])
+                continue
+            tx.execute(
+                f"""INSERT INTO {ziel_table}
+                    (Datum, Barcode, Barcode2, Bezeichnung, Profil, Mass, LaengeMM,
+                     MaterialGruppe, Material, OrtRegal, Typ, MengeStueck, EPreis, EPreisEinheit)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    zeile["Datum"], zeile["Barcode"], zeile["Barcode2"], zeile["Bezeichnung"], zeile["Profil"],
+                    zeile["Mass"], zeile["LaengeMM"], zeile["MaterialGruppe"], zeile["Material"], zeile["OrtRegal"],
+                    zeile["Typ"], zeile["MengeStueck"], zeile["EPreis"], zeile["EPreisEinheit"],
+                ),
+            )
+            tx.execute("DELETE FROM Papierkorb WHERE ID = ?", (papierkorb_id,))
+            wiederhergestellt += 1
+    return wiederhergestellt, konflikte
+
+
+def papierkorb_endgueltig_loeschen_mehrere(papierkorb_ids: list[int]) -> int:
+    """Loescht mehrere Papierkorb-Eintraege UNWIDERRUFLICH (eine Transaktion). Gibt die Anzahl zurueck."""
+    geloescht = 0
+    with _SCHREIB_LOCK, db.transaktion() as tx:
+        for papierkorb_id in dict.fromkeys(papierkorb_ids):
+            if tx.fetch_one("SELECT ID FROM Papierkorb WHERE ID = ?", (papierkorb_id,)) is None:
+                continue
+            tx.execute("DELETE FROM Papierkorb WHERE ID = ?", (papierkorb_id,))
+            geloescht += 1
+    return geloescht
+
+
 def edit_artikel_stueck(table: str, barcode2: str, **felder) -> None:
     """felder z.B. LaengeMM=500, OrtRegal='A1', Typ='Voll', MengeStueck=2, EPreis=1.5, EPreisEinheit='Stk'"""
     if not felder:
