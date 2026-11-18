@@ -28,7 +28,7 @@ Weitere Anleitungen:
 
 ### Mehrfach-Auswahl und Löschen
 
-Auf **Artikel Liste** und **Reste** sowie im **Papierkorb** lassen sich Zeilen per Häkchen auswählen (Kopfzeile = alle):
+Auf **Artikel Liste** und **Reste** sowie im **Papierkorb** lassen sich Zeilen per Kästchen auswählen (Kopfzeile = alle; am Computer für mehrere Zeilen Strg bzw. Cmd gedrückt halten, Umschalt = Bereich, am Tablet/Handy einfach nacheinander antippen):
 
 - Artikel Liste / Reste: *„N ausgewählte löschen"* verschiebt nach Rückfrage in den Papierkorb. Bei aktivem Filter gibt es zusätzlich *„Alle N angezeigten löschen"*. Der Filter bleibt aktiv, bis man *„Filter zurücksetzen"* klickt.
 - Papierkorb: *„N wiederherstellen"* oder *„N endgültig löschen"* (mit Rückfrage). Wiederherstellen überspringt Stücke, deren Stück-Barcode inzwischen neu vergeben wurde, und nennt sie in der Meldung.

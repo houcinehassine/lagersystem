@@ -53,13 +53,13 @@ Auf dem Dashboard: Barcode scannen oder Bezeichnung eingeben – die Ergebnisse 
 
 ## Mehrere Artikel auf einmal löschen
 
-Auf den Seiten **Artikel Liste** und **Reste**: links in der Tabelle Häkchen setzen (das Häkchen in der Kopfzeile wählt alle) und auf **„🗑️ … ausgewählte löschen"** klicken. Nach einer Rückfrage landen die Stücke im **Papierkorb**.
+Auf den Seiten **Artikel Liste** und **Reste**: links in der Tabelle die Zeile anklicken. **Für mehrere Zeilen am Computer die Strg-Taste (Windows) bzw. Cmd-Taste (Mac) gedrückt halten** und weitere Zeilen anklicken (Umschalt-Taste = ganzer Bereich); das Kästchen in der Kopfzeile wählt alle. Am Tablet/Handy genügt es, die Kästchen nacheinander anzutippen und auf **„🗑️ … ausgewählte löschen"** klicken. Nach einer Rückfrage landen die Stücke im **Papierkorb**.
 
 Das funktioniert auch mit dem Filter: erst filtern, dann entweder einzelne Zeilen auswählen oder – bei aktivem Filter – **„Alle … angezeigten löschen"** nehmen. Der Filter bleibt aktiv, bis man auf „Filter zurücksetzen" klickt.
 
 ## Aus Versehen gelöscht?
 
-Kein Problem: Gelöschte Artikel landen zunächst im **Papierkorb**. Dort links Häkchen setzen (Kopfzeile = alle) und auf **„♻️ … wiederherstellen"** klicken, um sie zurückzuholen. Erst **„🗑️ … endgültig löschen"** mit extra Rückfrage entfernt sie wirklich. Beides geht für mehrere Artikel gleichzeitig.
+Kein Problem: Gelöschte Artikel landen zunächst im **Papierkorb**. Dort die Zeilen auswählen (wie oben beschrieben; Kopfzeile = alle) und auf **„♻️ … wiederherstellen"** klicken, um sie zurückzuholen. Erst **„🗑️ … endgültig löschen"** mit extra Rückfrage entfernt sie wirklich. Beides geht für mehrere Artikel gleichzeitig.
 
 Wiederherstellen klappt nur, wenn der Stück-Barcode nicht inzwischen neu vergeben wurde. Solche Stücke bleiben im Papierkorb, und die App nennt sie in der Meldung.
 
